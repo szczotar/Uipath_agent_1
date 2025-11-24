@@ -1,0 +1,31 @@
+{
+    "entryPoints": [
+        {
+            "filePath": "agent",
+            "uniqueId": "0da373d7-ca88-4978-8966-9e522131c5fc",
+            "type": "agent",
+            "input": {
+                "type": "object",
+                "properties": {
+                    "input_message": {
+                        "title": "User Message",
+                        "type": "string"
+                    }
+                },
+                "required": [
+                    "input_message"
+                ]
+            },
+            "output": {
+                "type": "object",
+                "properties": {
+                    "result": {
+                        "title": "Result",
+                        "type": "string"
+                    }
+                },
+                "required": []
+            }
+        }
+    ]
+}
