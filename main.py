@@ -8,11 +8,38 @@ from langgraph.graph import StateGraph, END, START
 from langgraph.prebuilt import ToolNode # Używamy ToolNode zgodnie z wymaganiem
 from langchain_openai import ChatOpenAI
 import os
+
+import requests
+import json
 from langchain_core.messages import SystemMessage
 from langgraph.graph.message import add_messages
 # --- 1. Inicjalizacja i konfiguracja ---
 sdk = UiPath()
 
+TRAFFIT_BASE_URL = "https://mindboxgroup.traffit.com"
+
+def _get_traffit_token(base_url):
+    """Helper function to get the authentication token."""
+    url_endpoint = f"{base_url}/oauth2/token"
+    scope = "employee, file, advert, advert_publish, client, crm_activity, crm_person, form, message, provision, recruitment, talent, user, webhook, workflow, source, dictionary"
+    headers = {"Content-Type": "application/json"}
+    body = {
+        "client_id": "mindboxgroup_CVtagv2",
+        "client_secret": os.getenv("Traffit_Client_Secret"),
+        "grant_type": "client_credentials",
+        "scope": scope.replace(",", "")
+    }
+    response = requests.post(url=url_endpoint, headers=headers, data=json.dumps(body))
+    response.raise_for_status()  # This will raise an error for bad responses (4xx or 5xx)
+    return response.json()['access_token']
+
+def _get_candidate_data(base_url, candidate_id, access_token):
+    """Helper function to get candidate data."""
+    headers = {"Content-Type": "application/json", "Authorization": f"Bearer {access_token}"}
+    url_endpoint = f"{base_url}/api/integration/v2/employees/{candidate_id}"
+    response = requests.get(url=url_endpoint, headers=headers)
+    response.raise_for_status()
+    return response.json()
 # --- 2. Definicja narzędzi (Tools) ---
 
 @tool
@@ -48,7 +75,27 @@ async def download_file_from_uipath_bucket(file_path: str, bucket_name: str = "G
         if os.path.exists(local_temp_path):
             os.remove(local_temp_path)
 
-tools = [download_file_from_uipath_bucket]
+@tool
+def get_traffit_candidate_data(candidate_id: int) -> str:
+    """
+    Fetches data for a specific candidate from the Traffit system using their ID.
+    Use this tool when the user asks to find, get, or search for a candidate in Traffit.
+    
+    Args:
+        candidate_id (int): The numerical ID of the candidate to search for.
+    """
+    print(f"Narzędzie: Pobieranie danych kandydata o ID: {candidate_id} z Traffit...")
+    try:
+        token = _get_traffit_token(TRAFFIT_BASE_URL)
+        candidate_data = _get_candidate_data(TRAFFIT_BASE_URL, candidate_id, token)
+        # Zwracamy dane jako sformatowany string JSON, aby LLM mógł je łatwo przeczytać
+        return json.dumps(candidate_data, indent=2, ensure_ascii=False)
+    except requests.exceptions.HTTPError as http_err:
+        return f"HTTP error occurred: {http_err} - Response: {http_err.response.text}"
+    except Exception as e:
+        return f"An unexpected error occurred: {e}"
+    
+tools = [download_file_from_uipath_bucket, get_traffit_candidate_data]
 
 # --- 3. Definicja stanu (State) i wejścia/wyjścia ---
 
